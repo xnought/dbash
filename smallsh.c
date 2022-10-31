@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_LINE 256
+#define MAX_LINE 2048
 
 void readStdIn(char *buffer)
 {
