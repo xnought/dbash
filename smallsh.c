@@ -24,15 +24,13 @@ void clearLineBuffer(char *lineBuffer)
 	memset(lineBuffer, 0, MAX_LINE);
 }
 
-/*
-	This function will take the buffer and decide if it is blank or not
-*/
-int isBlankLineOrComment(char *lineBuffer)
+int isBlank(char *lineBuffer)
 {
-	/* check first character is null or #*/
-	char firstChar = lineBuffer[0];
-	int blankOrComment = firstChar == '\0' || firstChar == '#';
-	return blankOrComment;
+	return lineBuffer[0] == '\0';
+}
+int isComment(char *lineBuffer)
+{
+	return lineBuffer[0] == '#';
 }
 
 /*
@@ -48,15 +46,18 @@ void commandPrompt(char *lineBuffer)
 
 int main()
 {
-	char *buffer[MAX_LINE];
+	char *cmdBuffer[MAX_LINE];
 	while (1)
 	{
-		clearLineBuffer(buffer);
-		commandPrompt(buffer);
+		clearLineBuffer(cmdBuffer);
+		commandPrompt(cmdBuffer);
 
-		if (isBlankLineOrComment(buffer))
+		if (isBlank(cmdBuffer) || isComment(cmdBuffer))
 		{
+			printf("blank or comment\n");
 			continue;
 		}
+
+		/* otherwise tokenize! */
 	}
 }
