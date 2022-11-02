@@ -49,14 +49,22 @@ int main()
 	char *cmdBuffer[MAX_LINE];
 	while (1)
 	{
+		/* take in user input : ______________ */
 		clearLineBuffer(cmdBuffer);
 		commandPrompt(cmdBuffer);
 
+		/* don't do anything if not a command */
 		if (isBlank(cmdBuffer) || isComment(cmdBuffer))
 		{
 			continue;
 		}
 
-		/* otherwise tokenize! */
+		/* otherwise tokenize so I can use the input! */
+		/* 1. use tokens to expand $$ */
+		/* 2. parse tokens for cd, exit, and status and run those commands */
+		/* 3. otherwise, execute what the user gave */
+		/* 4. send < into stdin */
+		/* 5. send stdout to > file */
+		/* 6. override signals */
 	}
 }
