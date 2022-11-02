@@ -17,6 +17,25 @@ void readStdIn(char *buffer)
 }
 
 /*
+	replaces the entire string with blanks
+*/
+void clearLineBuffer(char *lineBuffer)
+{
+	memset(lineBuffer, 0, MAX_LINE);
+}
+
+/*
+	This function will take the buffer and decide if it is blank or not
+*/
+int isBlankLineOrComment(char *lineBuffer)
+{
+	/* check first character is null or #*/
+	char firstChar = lineBuffer[0];
+	int blankOrComment = firstChar == '\0' || firstChar == '#';
+	return blankOrComment;
+}
+
+/*
 	Print a : and get the user input
 	returns the size of the buffer
  */
@@ -32,7 +51,12 @@ int main()
 	char *buffer[MAX_LINE];
 	while (1)
 	{
+		clearLineBuffer(buffer);
 		commandPrompt(buffer);
-		printf("%s\n", buffer);
+
+		if (isBlankLineOrComment(buffer))
+		{
+			continue;
+		}
 	}
 }
