@@ -54,7 +54,6 @@ int main()
 
 		if (isBlank(cmdBuffer) || isComment(cmdBuffer))
 		{
-			printf("blank or comment\n");
 			continue;
 		}
 
