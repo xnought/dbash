@@ -49,7 +49,7 @@ void commandPrompt(char *lineBuffer)
 
 struct llNode
 {
-	void *data;
+	char *data;
 	struct llNode *next;
 };
 
@@ -86,7 +86,7 @@ void pushLinkedList(struct ll *list, void *data)
 	}
 	list->length++;
 }
-void freeLinkedListNode(struct llNode *node, void (*freeData)(void *))
+void freeLinkedListNode(struct llNode *node, void (*freeData)(char *))
 {
 	if (node == NULL)
 	{
@@ -98,7 +98,7 @@ void freeLinkedListNode(struct llNode *node, void (*freeData)(void *))
 	}
 	free(node);
 }
-void freeLinkedList(struct ll *list, void (*freeData)(void *))
+void freeLinkedList(struct ll *list, void (*freeData)(char *))
 {
 	struct llNode *curNode = list->start;
 	struct llNode *nextNode = curNode;
@@ -150,7 +150,7 @@ void printTokens(struct ll *tokens)
 	struct llNode *curNode = tokens->start;
 	while (curNode)
 	{
-		printf("%s\n", (char *)curNode->data);
+		printf("%s\n", curNode->data);
 		curNode = curNode->next;
 	}
 }
@@ -166,7 +166,7 @@ void expandVariables(struct ll *tokens)
 	struct llNode *curNode = tokens->start;
 	while (curNode)
 	{
-		char *token = (char *)curNode->data;
+		char *token = curNode->data;
 		if (strcmp(token, "$$") == 0)
 		{
 			freeToken(token);
@@ -182,7 +182,7 @@ void expandVariables(struct ll *tokens)
 
 int main()
 {
-	char *cmdBuffer[MAX_LINE];
+	char cmdBuffer[MAX_LINE];
 	struct ll *tokens;
 
 	while (1)
@@ -199,8 +199,20 @@ int main()
 
 		/* otherwise tokenize so I can use the input! */
 		tokens = tokenizer(cmdBuffer);
+		if (tokens->length == 0)
+		{
+			freeLinkedList(tokens, freeToken);
+			continue;
+		}
+
 		/* 1. use tokens to expand $$ */
 		expandVariables(tokens);
+
+		if (strcmp(tokens->start->data, "exit") == 0)
+		{
+			freeLinkedList(tokens, freeToken);
+			break;
+		}
 
 		/* 2. parse tokens for cd, exit, and status and run those commands */
 		/* 3. otherwise, execute what the user gave */
@@ -208,7 +220,6 @@ int main()
 		/* 5. send stdout to > file */
 		/* 6. override signals */
 
-		printTokens(tokens);
 		freeLinkedList(tokens, freeToken);
 	}
 }
