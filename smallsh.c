@@ -180,10 +180,29 @@ void expandVariables(struct ll *tokens)
 	}
 }
 
+struct llNode *getNode(struct ll *tokens, int index)
+{
+	struct llNode *curNode = tokens->start;
+	int i = 0;
+	while (curNode && i < index)
+	{
+		i++;
+		curNode = curNode->next;
+	}
+	return curNode;
+}
+
+char *getToken(struct ll *tokens, int index)
+{
+	struct llNode *node = getNode(tokens, index);
+	return node ? node->data : NULL;
+}
+
 int main()
 {
 	char cmdBuffer[MAX_LINE];
 	struct ll *tokens;
+	char *baseToken;
 
 	while (1)
 	{
@@ -206,12 +225,34 @@ int main()
 		}
 
 		/* 1. use tokens to expand $$ */
+		/* @TODO!!!!!!!!!! even if not own token expand $$ */
 		expandVariables(tokens);
 
-		if (strcmp(tokens->start->data, "exit") == 0)
+		baseToken = getToken(tokens, 0);
+		if (strcmp(baseToken, "exit") == 0)
 		{
+			/* @TODO!!!!!!!!!!!!!!! also kill all the child processes */
 			freeLinkedList(tokens, freeToken);
 			break;
+		}
+		else if (strcmp(baseToken, "cd") == 0)
+		{
+			if (getToken(tokens, 1) == NULL)
+			{
+				chdir(getenv("HOME"));
+			}
+			else
+			{
+				if (chdir(getToken(tokens, 1)) == -1)
+				{
+					printf("%s does not exist\n", tokens->start->next->data);
+				}
+			}
+		}
+		else if (strcmp(baseToken, "status") == 0)
+		{
+
+			/*  */
 		}
 
 		/* 2. parse tokens for cd, exit, and status and run those commands */
