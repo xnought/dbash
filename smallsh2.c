@@ -119,13 +119,88 @@ void freeTokens(struct cmd *cmdInfo)
 	}
 }
 
-void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
+int dollarsOccursIn(char *token)
+{
+	int count = 0;
+	int i = 0;
+	int j = 1;
+	int tokenLen = strlen(token);
+	char a, b;
+	while (i < tokenLen && token[i] != 0 && token[j] != 0)
+	{
+		a = token[i];
+		b = token[j];
+		if (a == '$' && b == '$')
+		{
+			count++;
+			i++;
+			j++;
+		}
+		i++;
+		j++;
+	}
+	return count;
+}
+
+char *dollarsSubstring(char *str)
+{
+	return strstr(str, "$$") == str;
+}
+void replaceDollars(char *str, char *result, char *pidStr)
+{
+	int i = 0;
+	int charIndex = 0;
+	int found = 0;
+	while (str[charIndex])
+	{
+		found = dollarsSubstring(str + charIndex);
+		if (found)
+		{
+			strcpy(&result[i], pidStr);
+			i += strlen(pidStr);
+			charIndex += 2;
+		}
+		else
+		{
+			result[i] = str[charIndex];
+			i++;
+			charIndex++;
+		}
+		found = 0;
+	}
+}
+/*
+	the result needs to be freed
+ */
+char *replaceAll$$WithPid(char *string, char *pidString)
+{
+	char *expanded;
+	int ogLen = strlen(string);
+	int pidLen = strlen(pidString);
+	int dollarsLen = 2;
+	int memoryIncrease;
+	int i;
+
+	/* compute the num we have to replace to alloc right size*/
+	int numFound = dollarsOccursIn(string);
+	memoryIncrease = numFound * (pidLen - dollarsLen);
+	expanded = (char *)malloc(ogLen + memoryIncrease);
+
+	/* then replace and copy to expanded memory */
+	replaceDollars(string, expanded, pidString);
+
+	return expanded;
+}
+
+void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode, pid_t pid)
 {
 	char *rest = buffer;
 	char *token;
 	char *tokenCopy;
 	int hitSpecialChar = -1;
 	int i;
+	char pidString[10] = {NULL};
+	sprintf(pidString, "%d", pid);
 
 	resetCmd(cmdInfo);
 
@@ -133,7 +208,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 	token = strtok_r(rest, " ", &rest);
 	if (token != NULL)
 	{
-		tokenCopy = copyToken(token);
+		tokenCopy = replaceAll$$WithPid(token, pidString);
 		addToken(cmdInfo, tokenCopy);
 	}
 	cmdInfo->cmdName = cmdInfo->tokens[0];
@@ -142,7 +217,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 	while ((token = strtok_r(rest, " ", &rest)) != NULL && cmdInfo->tokenCount < MAX_TOKENS)
 	{
 		/* add each as a token */
-		tokenCopy = copyToken(token);
+		tokenCopy = replaceAll$$WithPid(token, pidString);
 		addToken(cmdInfo, tokenCopy);
 		if (hitSpecialChar == -1)
 		{
@@ -222,7 +297,7 @@ int main()
 		getCmdPrompt(buffer);
 
 		/* 2. parse the buffer for the command for key info */
-		parseCmdPrompt(buffer, &cmdInfo, foregroundMode);
+		parseCmdPrompt(buffer, &cmdInfo, foregroundMode, smallshPid);
 
 		if (isBlank(&cmdInfo) || isComment(&cmdInfo))
 		{
