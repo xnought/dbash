@@ -80,6 +80,14 @@ void readIntoBuffer(char *buffer)
 	}
 }
 
+void popArg(struct cmd *cmdInfo)
+{
+	if (cmdInfo->argCount > 0)
+	{
+		cmdInfo->argCount--;
+		cmdInfo->args[cmdInfo->argCount] = NULL;
+	}
+}
 void addArg(struct cmd *cmdInfo, char *token)
 {
 	cmdInfo->args[cmdInfo->argCount] = token;
@@ -102,7 +110,10 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 
 	/* the first token is the command name */
 	token = strtok_r(rest, " ", &rest);
-	addToken(cmdInfo, token);
+	if (token != NULL)
+	{
+		addToken(cmdInfo, token);
+	}
 	cmdInfo->cmdName = token;
 
 	/* the next tokens are arguments until we hit a '<' or a '>' */
@@ -113,7 +124,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 		if (hitSpecialChar == -1)
 		{
 
-			if (strcmp(token, "<") == 0 || strcmp(token, ">") == 0 || strcmp(token, "&") == 0)
+			if (strcmp(token, "<") == 0 || strcmp(token, ">") == 0)
 			{
 				/* subtract 1 since we want an index */
 				hitSpecialChar = cmdInfo->tokenCount - 1;
@@ -142,17 +153,20 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 				i++;
 				cmdInfo->outputRedir = cmdInfo->tokens[i];
 			}
-			else if (strcmp(cmdInfo->tokens[i], "&") == 0 && foregroundMode == 0)
-			{
-				cmdInfo->background = 1;
-			}
 			i++;
 		}
 	}
 
 	/* if a background process, send io to dev/null if not specified */
-	if (cmdInfo->background)
+	if (cmdInfo->tokenCount > 0 && strcmp(cmdInfo->tokens[cmdInfo->tokenCount - 1], "&") == 0 && foregroundMode == 0)
 	{
+		cmdInfo->background = 1;
+		/* if never stopped short, pop off the & at the end of the arg */
+		if (hitSpecialChar == -1)
+		{
+			popArg(cmdInfo);
+		}
+
 		if (cmdInfo->inputRedir == NULL)
 		{
 			cmdInfo->inputRedir = "dev/null";
