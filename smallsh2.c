@@ -290,6 +290,7 @@ int main()
 	struct cmd cmdInfo;
 	int foregroundMode = 0;
 	pid_t smallshPid = getpid();
+	int status = 0;
 
 	while (1)
 	{
@@ -303,6 +304,36 @@ int main()
 		{
 			continue;
 		}
+
+		/* base implemented function exit, cd and status */
+		if (strcmp(cmdInfo.cmdName, "exit") == 0)
+		{
+			/* @TODO!!!!!!!!!!!!!!! also kill all the child processes */
+			freeTokens(&cmdInfo);
+			break;
+		}
+		else if (strcmp(cmdInfo.cmdName, "cd") == 0)
+		{
+			if (cmdInfo.argCount == 0)
+			{
+				chdir(getenv("HOME"));
+			}
+			else
+			{
+				if (chdir(cmdInfo.args[0]) == -1)
+				{
+					printf("%s does not exist\n", cmdInfo.args[0]);
+					fflush(stdout);
+				}
+			}
+		}
+		else if (strcmp(cmdInfo.cmdName, "status") == 0)
+		{
+			printf("exit value %d\n", status);
+			fflush(stdout);
+		}
+
+		/* exec custom functions if none of these went off */
 
 		freeTokens(&cmdInfo);
 	}
