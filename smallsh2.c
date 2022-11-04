@@ -28,6 +28,14 @@ struct cmd
 	int background;
 };
 
+int isBlank(struct cmd *cmdInfo)
+{
+	return cmdInfo->cmdName == NULL;
+}
+int isComment(struct cmd *cmdInfo)
+{
+	return strcmp(cmdInfo->cmdName, "#") == 0;
+}
 void resetCmd(struct cmd *cmdInfo)
 {
 	clearArrayOfStrings(cmdInfo->tokens, MAX_TOKENS);
@@ -88,7 +96,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 	char *rest = buffer;
 	char *token;
 	int hitSpecialChar = -1;
-	char *lastWord;
+	int i;
 
 	resetCmd(cmdInfo);
 
@@ -118,25 +126,28 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 		}
 	}
 
-	int i = hitSpecialChar;
-	while (i < cmdInfo->tokenCount)
+	if (hitSpecialChar != -1)
 	{
+		i = hitSpecialChar;
+		while (i < cmdInfo->tokenCount)
+		{
 
-		if (strcmp(cmdInfo->tokens[i], "<") == 0)
-		{
+			if (strcmp(cmdInfo->tokens[i], "<") == 0)
+			{
+				i++;
+				cmdInfo->inputRedir = cmdInfo->tokens[i];
+			}
+			else if (strcmp(cmdInfo->tokens[i], ">") == 0)
+			{
+				i++;
+				cmdInfo->outputRedir = cmdInfo->tokens[i];
+			}
+			else if (strcmp(cmdInfo->tokens[i], "&") == 0 && foregroundMode == 0)
+			{
+				cmdInfo->background = 1;
+			}
 			i++;
-			cmdInfo->inputRedir = cmdInfo->tokens[i];
 		}
-		else if (strcmp(cmdInfo->tokens[i], ">") == 0)
-		{
-			i++;
-			cmdInfo->outputRedir = cmdInfo->tokens[i];
-		}
-		else if (strcmp(cmdInfo->tokens[i], "&") == 0 && foregroundMode == 0)
-		{
-			cmdInfo->background = 1;
-		}
-		i++;
 	}
 
 	/* if a background process, send io to dev/null if not specified */
@@ -174,6 +185,11 @@ int main()
 
 		/* 2. parse the buffer for the command for key info */
 		parseCmdPrompt(buffer, &cmdInfo, foregroundMode);
+
+		if (isBlank(&cmdInfo) || isComment(&cmdInfo))
+		{
+			continue;
+		}
 	}
 
 	return 0;
