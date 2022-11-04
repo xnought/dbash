@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_BUFFER 2048
 #define MAX_TOKENS 517
@@ -99,10 +100,30 @@ void addToken(struct cmd *cmdInfo, char *token)
 	cmdInfo->tokenCount++;
 }
 
+char *copyToken(char *token)
+{
+	int length = strlen(token);
+	char *tokenCpy = (char *)malloc(sizeof(char) * length);
+	strcpy(tokenCpy, token);
+	return tokenCpy;
+}
+void freeTokens(struct cmd *cmdInfo)
+{
+	int i;
+	for (i = 0; i < cmdInfo->tokenCount; i++)
+	{
+		if (cmdInfo->tokens[i] != NULL)
+		{
+			free(cmdInfo->tokens[i]);
+		}
+	}
+}
+
 void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 {
 	char *rest = buffer;
 	char *token;
+	char *tokenCopy;
 	int hitSpecialChar = -1;
 	int i;
 
@@ -112,15 +133,17 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 	token = strtok_r(rest, " ", &rest);
 	if (token != NULL)
 	{
-		addToken(cmdInfo, token);
+		tokenCopy = copyToken(token);
+		addToken(cmdInfo, tokenCopy);
 	}
-	cmdInfo->cmdName = token;
+	cmdInfo->cmdName = cmdInfo->tokens[0];
 
 	/* the next tokens are arguments until we hit a '<' or a '>' */
 	while ((token = strtok_r(rest, " ", &rest)) != NULL && cmdInfo->tokenCount < MAX_TOKENS)
 	{
 		/* add each as a token */
-		addToken(cmdInfo, token);
+		tokenCopy = copyToken(token);
+		addToken(cmdInfo, tokenCopy);
 		if (hitSpecialChar == -1)
 		{
 
@@ -132,7 +155,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode)
 			else
 			{
 				/* if not a special char, its an arg!*/
-				addArg(cmdInfo, token);
+				addArg(cmdInfo, tokenCopy);
 			}
 		}
 	}
@@ -191,6 +214,7 @@ int main()
 	char buffer[MAX_BUFFER];
 	struct cmd cmdInfo;
 	int foregroundMode = 0;
+	pid_t smallshPid = getpid();
 
 	while (1)
 	{
@@ -204,6 +228,8 @@ int main()
 		{
 			continue;
 		}
+
+		freeTokens(&cmdInfo);
 	}
 
 	return 0;
