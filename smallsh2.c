@@ -285,18 +285,19 @@ void execCmd(struct cmd *cmdInfo, int *status)
 		exit(1);
 	}
 
-	char *cmdAndArgs[cmdInfo->argCount + 1 + 1];
-	for (int i = 0; i < cmdInfo->argCount; i++)
-	{
-		cmdAndArgs[i + 1] = cmdInfo->args[i];
-	}
-	cmdAndArgs[0] = cmdInfo->cmdName;
-	cmdAndArgs[cmdInfo->argCount + 1] = NULL;
-
 	/* fork off to child  */
 	if (id == 0)
 	{
-		/* include the cmd and args when passing into execvp */
+		/* combine the args and commands into one array for execvp */
+		char *cmdAndArgs[cmdInfo->argCount + 1 + 1];
+		for (int i = 0; i < cmdInfo->argCount; i++)
+		{
+			cmdAndArgs[i + 1] = cmdInfo->args[i];
+		}
+		cmdAndArgs[0] = cmdInfo->cmdName;
+		cmdAndArgs[cmdInfo->argCount + 1] = NULL;
+
+		/* execute or handle the not found execute */
 		if (execvp(cmdInfo->cmdName, cmdAndArgs) == -1)
 		{
 			printf("ERROR: %s not found\n", cmdInfo->cmdName);
