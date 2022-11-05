@@ -37,6 +37,14 @@ int isComment(struct cmd *cmdInfo)
 {
 	return strcmp(cmdInfo->cmdName, "#") == 0;
 }
+void clearArrayOfStrings(char **array, int size)
+{
+	int i;
+	for (i = 0; i < size; i++)
+	{
+		array[i] = NULL;
+	}
+}
 void resetCmd(struct cmd *cmdInfo)
 {
 	clearArrayOfStrings(cmdInfo->tokens, MAX_TOKENS);
@@ -51,14 +59,6 @@ void resetCmd(struct cmd *cmdInfo)
 	cmdInfo->outputRedir = NULL;
 
 	cmdInfo->background = 0;
-}
-void clearArrayOfStrings(char **array, int size)
-{
-	int i;
-	for (i = 0; i < size; i++)
-	{
-		array[i] = NULL;
-	}
 }
 void clearBuffer(char *buffer)
 {
@@ -100,22 +100,12 @@ void addToken(struct cmd *cmdInfo, char *token)
 	cmdInfo->tokenCount++;
 }
 
-char *copyToken(char *token)
-{
-	int length = strlen(token);
-	char *tokenCpy = (char *)malloc(sizeof(char) * length);
-	strcpy(tokenCpy, token);
-	return tokenCpy;
-}
 void freeTokens(struct cmd *cmdInfo)
 {
 	int i;
 	for (i = 0; i < cmdInfo->tokenCount; i++)
 	{
-		if (cmdInfo->tokens[i] != NULL)
-		{
-			free(cmdInfo->tokens[i]);
-		}
+		free(cmdInfo->tokens[i]);
 	}
 }
 
@@ -142,31 +132,26 @@ int dollarsOccursIn(char *token)
 	return count;
 }
 
-char *dollarsSubstring(char *str)
-{
-	return strstr(str, "$$") == str;
-}
-void replaceDollars(char *str, char *result, char *pidStr)
+void replaceDollars(char *str, char *expanded, char *pidStr, int occurs)
 {
 	int i = 0;
-	int charIndex = 0;
-	int found = 0;
-	while (str[charIndex])
+	while (str[0])
 	{
-		found = dollarsSubstring(str + charIndex);
-		if (found)
+		if (strstr(str, "$$") == str)
 		{
-			strcpy(&result[i], pidStr);
+			strcpy(&expanded[i], pidStr);
 			i += strlen(pidStr);
-			charIndex += 2;
+			str += 2;
 		}
 		else
 		{
-			result[i] = str[charIndex];
+			/* adds the normal characters to the new result */
+			expanded[i] = str[0];
+			/* move on in the expanded string too */
 			i++;
-			charIndex++;
+			/* shuv the string over, (dont consider ones before)*/
+			*str++;
 		}
-		found = 0;
 	}
 }
 /*
@@ -174,22 +159,21 @@ void replaceDollars(char *str, char *result, char *pidStr)
  */
 char *replaceAll$$WithPid(char *string, char *pidString)
 {
-	char *expanded;
-	int ogLen = strlen(string);
-	int pidLen = strlen(pidString);
-	int dollarsLen = 2;
-	int memoryIncrease;
-	int i;
+	int dollarsCount = dollarsOccursIn(string);
+	int memoryIncrease = dollarsCount * (strlen(pidString) - 2);
+	int newSize = (strlen(string) + memoryIncrease + 1);
+	char *largerMemory = (char *)malloc(sizeof(char) * newSize);
+	memset(largerMemory, 0, newSize);
 
-	/* compute the num we have to replace to alloc right size*/
-	int numFound = dollarsOccursIn(string);
-	memoryIncrease = numFound * (pidLen - dollarsLen);
-	expanded = (char *)malloc(ogLen + memoryIncrease);
-
-	/* then replace and copy to expanded memory */
-	replaceDollars(string, expanded, pidString);
-
-	return expanded;
+	if (dollarsCount > 0)
+	{
+		replaceDollars(string, largerMemory, pidString, dollarsCount);
+	}
+	else
+	{
+		strcpy(largerMemory, string);
+	}
+	return largerMemory;
 }
 
 void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode, pid_t pid)
@@ -199,7 +183,7 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode, pid_t
 	char *tokenCopy;
 	int hitSpecialChar = -1;
 	int i;
-	char pidString[10] = {NULL};
+	char pidString[10] = {'\0'};
 	sprintf(pidString, "%d", pid);
 
 	resetCmd(cmdInfo);
@@ -284,6 +268,53 @@ void getCmdPrompt(char *buffer)
 	readIntoBuffer(buffer);
 }
 
+/*
+	Takes in the command information
+	and executes the program looking into PATH
+
+	Also if < exists, redirect stdin
+	Also if > exists, redirect stdout
+*/
+void execCmd(struct cmd *cmdInfo, int *status)
+{
+	pid_t id = fork();
+
+	if (id == -1)
+	{
+		perror("fork failed");
+		exit(1);
+	}
+
+	char *cmdAndArgs[cmdInfo->argCount + 1 + 1];
+	for (int i = 0; i < cmdInfo->argCount; i++)
+	{
+		cmdAndArgs[i + 1] = cmdInfo->args[i];
+	}
+	cmdAndArgs[0] = cmdInfo->cmdName;
+	cmdAndArgs[cmdInfo->argCount + 1] = NULL;
+
+	/* fork off to child  */
+	if (id == 0)
+	{
+		/* include the cmd and args when passing into execvp */
+		if (execvp(cmdInfo->cmdName, cmdAndArgs) == -1)
+		{
+			printf("ERROR: %s not found\n", cmdInfo->cmdName);
+			fflush(stdout);
+			*status = 1;
+		}
+	}
+	/* parent process */
+	else
+	{
+		int childStatus;
+		wait(&childStatus);
+		if (WIFEXITED(childStatus))
+		{
+			*status = WEXITSTATUS(childStatus);
+		}
+	}
+}
 int main()
 {
 	char buffer[MAX_BUFFER];
@@ -332,8 +363,13 @@ int main()
 			printf("exit value %d\n", status);
 			fflush(stdout);
 		}
-
-		/* exec custom functions if none of these went off */
+		else
+		{
+			/* otherwise not a base command, execute it with exec! */
+			// execCmd(&cmdInfo, &status);
+			printf("Couldn't find %s\n", cmdInfo.cmdName);
+			fflush(stdout);
+		}
 
 		freeTokens(&cmdInfo);
 	}
