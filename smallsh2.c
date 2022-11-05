@@ -35,7 +35,7 @@ int isBlank(struct cmd *cmdInfo)
 }
 int isComment(struct cmd *cmdInfo)
 {
-	return strcmp(cmdInfo->cmdName, "#") == 0;
+	return cmdInfo->cmdName[0] == '#';
 }
 void clearArrayOfStrings(char **array, int size)
 {
@@ -301,7 +301,7 @@ void execCmd(struct cmd *cmdInfo, int *status)
 		{
 			printf("ERROR: %s not found\n", cmdInfo->cmdName);
 			fflush(stdout);
-			*status = 1;
+			exit(1);
 		}
 	}
 	/* parent process */
@@ -366,9 +366,7 @@ int main()
 		else
 		{
 			/* otherwise not a base command, execute it with exec! */
-			// execCmd(&cmdInfo, &status);
-			printf("Couldn't find %s\n", cmdInfo.cmdName);
-			fflush(stdout);
+			execCmd(&cmdInfo, &status);
 		}
 
 		freeTokens(&cmdInfo);
