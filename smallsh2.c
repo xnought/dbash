@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX_BUFFER 2048
 #define MAX_TOKENS 517
@@ -398,7 +399,15 @@ int main()
 			/* base implemented function exit, cd and status */
 			if (strcmp(cmdInfo.cmdName, "exit") == 0)
 			{
-				/* @TODO!!!!!!!!!!!!!!! also kill all the child processes */
+				/* kill all child processes upon exit */
+				for (int i = 0; i < MAX_BG_PROCESSES; i++)
+				{
+					if (bgProcesses[i] != -1)
+					{
+						kill(bgProcesses[i], SIGKILL);
+					}
+				}
+
 				freeTokens(&cmdInfo);
 				break;
 			}
@@ -436,6 +445,7 @@ int main()
 		int i = 0;
 		pid_t res;
 		int childStatus;
+		int exitSignal;
 		for (i = 0; i < MAX_BG_PROCESSES; i++)
 		{
 			if (bgProcesses[i] != -1)
@@ -443,8 +453,9 @@ int main()
 				res = waitpid(bgProcesses[i], &childStatus, WNOHANG);
 				if (res != 0)
 				{
+					exitSignal = WTERMSIG(childStatus);
 					status = WEXITSTATUS(childStatus);
-					printf("background pid %d is done: exit value %d\n", bgProcesses[i], status);
+					printf("background pid %d is done: exit signal %d\n", bgProcesses[i], exitSignal);
 					fflush(stdout);
 					bgProcesses[i] = -1;
 				}
