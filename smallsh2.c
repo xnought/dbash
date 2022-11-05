@@ -455,8 +455,16 @@ int main()
 				{
 					exitSignal = WTERMSIG(childStatus);
 					status = WEXITSTATUS(childStatus);
-					printf("background pid %d is done: exit signal %d\n", bgProcesses[i], exitSignal);
-					fflush(stdout);
+					if (exitSignal != 0)
+					{
+						printf("background pid %d is done: terminated by signal %d\n", bgProcesses[i], exitSignal);
+						fflush(stdout);
+					}
+					else
+					{
+						printf("background pid %d is done: exit value %d\n", bgProcesses[i], exitSignal);
+						fflush(stdout);
+					}
 					bgProcesses[i] = -1;
 				}
 			}
