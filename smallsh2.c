@@ -8,6 +8,7 @@
 #define MAX_BUFFER 2048
 #define MAX_TOKENS 517
 #define MAX_ARGS 512
+#define MAX_BG_PROCESSES 100
 
 struct cmd
 {
@@ -253,11 +254,11 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode, pid_t
 
 		if (cmdInfo->inputRedir == NULL)
 		{
-			cmdInfo->inputRedir = "dev/null";
+			cmdInfo->inputRedir = "/dev/null";
 		}
 		if (cmdInfo->outputRedir == NULL)
 		{
-			cmdInfo->outputRedir = "dev/null";
+			cmdInfo->outputRedir = "/dev/null";
 		}
 	}
 }
@@ -277,7 +278,7 @@ void getCmdPrompt(char *buffer)
 	Also if < exists, redirect stdin
 	Also if > exists, redirect stdout
 */
-void execCmd(struct cmd *cmdInfo, int *status)
+void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSES])
 {
 	pid_t id = fork();
 
@@ -341,13 +342,35 @@ void execCmd(struct cmd *cmdInfo, int *status)
 	else
 	{
 		int childStatus;
-		wait(&childStatus);
-		if (WIFEXITED(childStatus))
+		if (cmdInfo->background == 0)
 		{
-			*status = WEXITSTATUS(childStatus);
+			waitpid(id, &childStatus, 0);
+			if (WIFEXITED(childStatus))
+			{
+				*status = WEXITSTATUS(childStatus);
+			}
+		}
+		else
+		{
+			/* if it is a background process, wait no hang */
+			pid_t childId = waitpid(id, &childStatus, WNOHANG);
+
+			/* add to first available space */
+			for (int i = 0; i < MAX_BG_PROCESSES; i++)
+			{
+				if (bgProcesses[i] == -1)
+				{
+					bgProcesses[i] = id;
+					break;
+				}
+			}
+
+			printf("background pid is %d\n", id);
+			fflush(stdout);
 		}
 	}
 }
+
 int main()
 {
 	char buffer[MAX_BUFFER];
@@ -355,6 +378,12 @@ int main()
 	int foregroundMode = 0;
 	pid_t smallshPid = getpid();
 	int status = 0;
+	pid_t bgProcesses[MAX_BG_PROCESSES] = {-1};
+
+	for (int i = 0; i < MAX_BG_PROCESSES; i++)
+	{
+		bgProcesses[i] = -1;
+	}
 
 	while (1)
 	{
@@ -364,45 +393,63 @@ int main()
 		/* 2. parse the buffer for the command for key info */
 		parseCmdPrompt(buffer, &cmdInfo, foregroundMode, smallshPid);
 
-		if (isBlank(&cmdInfo) || isComment(&cmdInfo))
+		if (!isBlank(&cmdInfo) && !isComment(&cmdInfo))
 		{
-			continue;
-		}
-
-		/* base implemented function exit, cd and status */
-		if (strcmp(cmdInfo.cmdName, "exit") == 0)
-		{
-			/* @TODO!!!!!!!!!!!!!!! also kill all the child processes */
-			freeTokens(&cmdInfo);
-			break;
-		}
-		else if (strcmp(cmdInfo.cmdName, "cd") == 0)
-		{
-			if (cmdInfo.argCount == 0)
+			/* base implemented function exit, cd and status */
+			if (strcmp(cmdInfo.cmdName, "exit") == 0)
 			{
-				chdir(getenv("HOME"));
+				/* @TODO!!!!!!!!!!!!!!! also kill all the child processes */
+				freeTokens(&cmdInfo);
+				break;
+			}
+			else if (strcmp(cmdInfo.cmdName, "cd") == 0)
+			{
+				if (cmdInfo.argCount == 0)
+				{
+					chdir(getenv("HOME"));
+				}
+				else
+				{
+					if (chdir(cmdInfo.args[0]) == -1)
+					{
+						printf("%s does not exist\n", cmdInfo.args[0]);
+						fflush(stdout);
+					}
+				}
+			}
+			else if (strcmp(cmdInfo.cmdName, "status") == 0)
+			{
+				printf("exit value %d\n", status);
+				fflush(stdout);
 			}
 			else
 			{
-				if (chdir(cmdInfo.args[0]) == -1)
-				{
-					printf("%s does not exist\n", cmdInfo.args[0]);
-					fflush(stdout);
-				}
+				/* otherwise not a base command, execute it with exec! */
+				execCmd(&cmdInfo, &status, bgProcesses);
 			}
-		}
-		else if (strcmp(cmdInfo.cmdName, "status") == 0)
-		{
-			printf("exit value %d\n", status);
-			fflush(stdout);
-		}
-		else
-		{
-			/* otherwise not a base command, execute it with exec! */
-			execCmd(&cmdInfo, &status);
 		}
 
 		freeTokens(&cmdInfo);
+		/* otherwise check if the background processed has finished without
+		actually waiting
+		*/
+		int i = 0;
+		pid_t res;
+		int childStatus;
+		for (i = 0; i < MAX_BG_PROCESSES; i++)
+		{
+			if (bgProcesses[i] != -1)
+			{
+				res = waitpid(bgProcesses[i], &childStatus, WNOHANG);
+				if (res != 0)
+				{
+					status = WEXITSTATUS(childStatus);
+					printf("background pid %d is done: exit value %d\n", bgProcesses[i], status);
+					fflush(stdout);
+					bgProcesses[i] = -1;
+				}
+			}
+		}
 	}
 
 	return 0;
