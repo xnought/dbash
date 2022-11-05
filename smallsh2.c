@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define MAX_BUFFER 2048
 #define MAX_TOKENS 517
@@ -288,6 +290,36 @@ void execCmd(struct cmd *cmdInfo, int *status)
 	/* fork off to child  */
 	if (id == 0)
 	{
+		/* handle for standard input redirect */
+		if (cmdInfo->inputRedir != NULL)
+		{
+			int fd = open(cmdInfo->inputRedir, O_RDONLY);
+			if (fd == -1)
+			{
+				printf("ERROR: cannot open %s for input\n", cmdInfo->inputRedir);
+				fflush(stdout);
+				exit(1);
+			}
+			dup2(fd, 0);
+			close(fd);
+		}
+
+		/* handle for standard output redirect */
+		if (cmdInfo->outputRedir != NULL)
+		{
+			/* give read and write access to anyone, this is not satanic despite the octal */
+			mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+			int fd = open(cmdInfo->outputRedir, O_WRONLY | O_CREAT | O_TRUNC, mode);
+			if (fd == -1)
+			{
+				printf("ERROR: cannot open %s for output\n", cmdInfo->outputRedir);
+				fflush(stdout);
+				exit(1);
+			}
+			dup2(fd, 1);
+			close(fd);
+		}
+
 		/* combine the args and commands into one array for execvp */
 		char *cmdAndArgs[cmdInfo->argCount + 1 + 1];
 		for (int i = 0; i < cmdInfo->argCount; i++)
