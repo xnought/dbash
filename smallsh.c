@@ -401,9 +401,10 @@ void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSE
 	/* fork off to child clone */
 	if (id == 0)
 	{
+
 		/* all children ignore signal stop */
 		sigStop.sa_handler = SIG_IGN;
-		sigfillset(&sigInt.sa_mask);
+		sigaction(SIGTSTP, &sigStop, NULL);
 
 		/* foreground processes make sure to exit with sig int */
 		if (!cmdInfo->background)
@@ -514,13 +515,24 @@ void readIntoBuffer(char *buffer)
 /*
 	: ___________
 	and returns the __________ part (the text the user input)
+
+	the sig action magic here is because if I've not entered something,
+	sig stop should interrupt and continue to the next line,
+	but if we're in a foreground process, we should not exit and continue
  */
-void getCmdPrompt(char *buffer)
+void getCmdPrompt(char *buffer, struct sigaction sigStop)
 {
+
+	sigStop.sa_flags = 0;
+	sigaction(SIGTSTP, &sigStop, NULL);
+
 	printf(": ");
 	fflush(stdout);
 
 	readIntoBuffer(buffer);
+
+	sigStop.sa_flags = SA_RESTART;
+	sigaction(SIGTSTP, &sigStop, NULL);
 }
 
 void checkBackgroundProcesses(pid_t bgProcesses[MAX_BG_PROCESSES], int *status)
@@ -577,6 +589,7 @@ int main()
 	/* set parent to ignore interrupt signal */
 	sigInt.sa_handler = SIG_IGN;
 	sigfillset(&sigInt.sa_mask);
+	sigInt.sa_flags = SA_RESTART;
 	sigaction(SIGINT, &sigInt, NULL);
 
 	/* set the parent to listen to stop signal for mode toggling */
@@ -588,7 +601,7 @@ int main()
 	while (1)
 	{
 		/* 1. The command prompt */
-		getCmdPrompt(buffer);
+		getCmdPrompt(buffer, sigStop);
 
 		/* 2. parse the buffer for the command for key info */
 		parseCmdPrompt(buffer, &cmdInfo, foregroundMode, pidString);
