@@ -479,6 +479,12 @@ void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSE
 			/* if a foreground process, actually wait! */
 			waitpid(id, &childStatus, 0);
 			*status = childStatus;
+
+			/* if foreground exited by user with sig int, print the terminating signal */
+			if (WIFSIGNALED(*status))
+			{
+				printSignal(*status);
+			}
 		}
 		else
 		{
@@ -634,12 +640,6 @@ int main()
 				/* not a base command? Then execute with the program from PATH var */
 				execCmd(&cmdInfo, &status, bgProcesses, sigInt, sigStop);
 			}
-		}
-
-		/* if foreground exited by user, print the terminating signal */
-		if (!WIFEXITED(status) && WTERMSIG(status) == SIGINT)
-		{
-			printSignal(status);
 		}
 
 		/*
