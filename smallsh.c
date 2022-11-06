@@ -144,13 +144,11 @@ void printSignal(int status)
 
 void exitOrSignalStatus(int status)
 {
-	int childExited = WIFEXITED(status);
-	int signalExited = !childExited;
-	if (signalExited)
+	if (WIFSIGNALED(status))
 	{
 		printSignal(status);
 	}
-	else
+	else if (WIFEXITED(status))
 	{
 		printExitStatus(status);
 	}
@@ -538,7 +536,7 @@ void checkBackgroundProcesses(pid_t bgProcesses[MAX_BG_PROCESSES], int *status)
 		{
 			/* if exited in some way, tell the user its done! */
 			res = waitpid(bgProcesses[i], &childStatus, WNOHANG);
-			if (res != 0)
+			if (res > 0)
 			{
 				*status = childStatus;
 				printf("background pid %d is done: ", bgProcesses[i]);
