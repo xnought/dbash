@@ -163,12 +163,12 @@ void foregroundModeSignal(int sig)
 	foregroundMode = !foregroundMode;
 	if (foregroundMode)
 	{
-		write(STDOUT_FILENO, "\nEntering foreground-only mode (& is now ignored)\n", 51);
+		write(STDOUT_FILENO, "Entering foreground-only mode (& is now ignored)\n", 50);
 		fflush(stdout);
 	}
 	else
 	{
-		write(STDOUT_FILENO, "\nExiting foreground-only mode\n", 31);
+		write(STDOUT_FILENO, "Exiting foreground-only mode\n", 30);
 		fflush(stdout);
 	}
 }
