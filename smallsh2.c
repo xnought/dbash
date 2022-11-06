@@ -244,22 +244,25 @@ void parseCmdPrompt(char *buffer, struct cmd *cmdInfo, int foregroundMode, pid_t
 	}
 
 	/* if a background process, send io to dev/null if not specified */
-	if (cmdInfo->tokenCount > 0 && strcmp(cmdInfo->tokens[cmdInfo->tokenCount - 1], "&") == 0 && foregroundMode == 0)
+	if (cmdInfo->tokenCount > 0 && strcmp(cmdInfo->tokens[cmdInfo->tokenCount - 1], "&") == 0)
 	{
-		cmdInfo->background = 1;
+		if (!foregroundMode)
+		{
+			cmdInfo->background = 1;
+			if (cmdInfo->inputRedir == NULL)
+			{
+				cmdInfo->inputRedir = "/dev/null";
+			}
+			if (cmdInfo->outputRedir == NULL)
+			{
+				cmdInfo->outputRedir = "/dev/null";
+			}
+		}
+
 		/* if never stopped short, pop off the & at the end of the arg */
 		if (hitSpecialChar == -1)
 		{
 			popArg(cmdInfo);
-		}
-
-		if (cmdInfo->inputRedir == NULL)
-		{
-			cmdInfo->inputRedir = "/dev/null";
-		}
-		if (cmdInfo->outputRedir == NULL)
-		{
-			cmdInfo->outputRedir = "/dev/null";
 		}
 	}
 }
@@ -279,7 +282,8 @@ void getCmdPrompt(char *buffer)
 	Also if < exists, redirect stdin
 	Also if > exists, redirect stdout
 */
-void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSES])
+void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSES],
+			 struct sigaction sigInt, struct sigaction sigStop)
 {
 	pid_t id = fork();
 
@@ -292,6 +296,18 @@ void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSE
 	/* fork off to child  */
 	if (id == 0)
 	{
+		/* all children ignore signal stop */
+		sigStop.sa_handler = SIG_IGN;
+		sigfillset(&sigInt.sa_mask);
+
+		/* foreground processes make sure to exit with sig int */
+		if (!cmdInfo->background)
+		{
+			/* if foreground process */
+			sigInt.sa_handler = SIG_DFL;
+			sigaction(SIGINT, &sigInt, NULL);
+		}
+
 		/* handle for standard input redirect */
 		if (cmdInfo->inputRedir != NULL)
 		{
@@ -346,10 +362,7 @@ void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSE
 		if (cmdInfo->background == 0)
 		{
 			waitpid(id, &childStatus, 0);
-			if (WIFEXITED(childStatus))
-			{
-				*status = WEXITSTATUS(childStatus);
-			}
+			*status = childStatus;
 		}
 		else
 		{
@@ -372,11 +385,50 @@ void execCmd(struct cmd *cmdInfo, int *status, pid_t bgProcesses[MAX_BG_PROCESSE
 	}
 }
 
+void printExitStatus(int status)
+{
+	printf("exit value of %d\n", WEXITSTATUS(status));
+	fflush(stdout);
+}
+void printSignal(int status)
+{
+	printf("terminated by signal %d\n", WTERMSIG(status));
+	fflush(stdout);
+}
+void exitOrSignalStatus(int status)
+{
+	int childExited = WIFEXITED(status);
+	int signalExited = !childExited;
+	if (signalExited)
+	{
+		printSignal(status);
+	}
+	else
+	{
+		printExitStatus(status);
+	}
+}
+
+int foregroundMode = 0;
+void foregroundModeSignal(int signo)
+{
+	foregroundMode = !foregroundMode;
+	if (foregroundMode)
+	{
+		write(STDOUT_FILENO, "\nEntering foreground-only mode (& is now ignored)\n", 51);
+		fflush(stdout);
+	}
+	else
+	{
+		write(STDOUT_FILENO, "\nExiting foreground-only mode\n", 31);
+		fflush(stdout);
+	}
+}
+
 int main()
 {
 	char buffer[MAX_BUFFER];
 	struct cmd cmdInfo;
-	int foregroundMode = 0;
 	pid_t smallshPid = getpid();
 	int status = 0;
 	pid_t bgProcesses[MAX_BG_PROCESSES] = {-1};
@@ -385,6 +437,20 @@ int main()
 	{
 		bgProcesses[i] = -1;
 	}
+
+	/* ignore the sig int in parent like in lecture */
+	struct sigaction sigInt = {0};
+	struct sigaction sigStop = {0};
+
+	/* ignore sig interrupt */
+	sigInt.sa_handler = SIG_IGN;
+	sigfillset(&sigInt.sa_mask);
+	sigaction(SIGINT, &sigInt, NULL);
+
+	/* sig stop will toggle the global foreground mode */
+	sigStop.sa_handler = foregroundModeSignal;
+	sigfillset(&sigStop.sa_mask);
+	sigaction(SIGTSTP, &sigStop, NULL);
 
 	while (1)
 	{
@@ -428,17 +494,23 @@ int main()
 			}
 			else if (strcmp(cmdInfo.cmdName, "status") == 0)
 			{
-				printf("exit value %d\n", status);
-				fflush(stdout);
+				exitOrSignalStatus(status);
 			}
 			else
 			{
 				/* otherwise not a base command, execute it with exec! */
-				execCmd(&cmdInfo, &status, bgProcesses);
+				execCmd(&cmdInfo, &status, bgProcesses, sigInt, sigStop);
 			}
 		}
 
 		freeTokens(&cmdInfo);
+
+		/* if foreground exited by user, print the terminating signal */
+		if (!WIFEXITED(status) && WTERMSIG(status) == SIGINT)
+		{
+			printSignal(status);
+		}
+
 		/* otherwise check if the background processed has finished without
 		actually waiting
 		*/
@@ -448,23 +520,19 @@ int main()
 		int exitSignal;
 		for (i = 0; i < MAX_BG_PROCESSES; i++)
 		{
+			/* look at the background process id*/
 			if (bgProcesses[i] != -1)
 			{
+				/* if exited in some way, tell the user its done! */
 				res = waitpid(bgProcesses[i], &childStatus, WNOHANG);
 				if (res != 0)
 				{
-					exitSignal = WTERMSIG(childStatus);
-					status = WEXITSTATUS(childStatus);
-					if (exitSignal != 0)
-					{
-						printf("background pid %d is done: terminated by signal %d\n", bgProcesses[i], exitSignal);
-						fflush(stdout);
-					}
-					else
-					{
-						printf("background pid %d is done: exit value %d\n", bgProcesses[i], exitSignal);
-						fflush(stdout);
-					}
+					status = childStatus;
+					printf("background pid %d is done: ", bgProcesses[i]);
+					fflush(stdout);
+					exitOrSignalStatus(status);
+
+					/* and remove this one from the list of background processes since it finished*/
 					bgProcesses[i] = -1;
 				}
 			}

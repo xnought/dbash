@@ -1,7 +1,10 @@
 all: build 
 
 build:
-	gcc-12 -std=gnu99 -o small smallsh2.c
+	gcc-12 -std=gnu99 -o smallsh smallsh2.c
 
 run:
-	./small
+	./smallsh
+
+test:
+	./p3testscript > mytestresults 2>&1 
