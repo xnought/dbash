@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 /* hard limits */
 #define MAX_BUFFER 2048
