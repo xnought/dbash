@@ -1,4 +1,4 @@
-CC=gcc
+CC=gcc-12
 CFLAGS=-std=gnu99
 NAME=dbash
 
